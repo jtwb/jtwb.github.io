@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset='utf-8'>
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <link href='https://fonts.googleapis.com/css?family=Chivo:900' rel='stylesheet' type='text/css'>
+    <link rel="stylesheet" type="text/css" href="stylesheets/bootstrap.css" media="screen" />
+    <link rel="stylesheet" type="text/css" href="stylesheets/stylesheet.css" media="screen" />
+    <link rel="stylesheet" type="text/css" href="stylesheets/pygment_trac.css" media="screen" />
+    <link rel="stylesheet" type="text/css" href="stylesheets/print.css" media="print" />
+    <!--[if lt IE 9]>
+    <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <title>"What can go wrong?" by jtwb</title>
+  </head>
+
+  <body>
+    <div id="container">
+      <article class="inner" data-tags="web performance, backbone, ember, backbone.js, ember.js, wpo, javascript, front-end">
+
+        <header>
+          <h1>What can go wrong</h1>
+          <h2>Making big sites fast - <a href="https://plus.google.com/u/1/109755762919618762766?rel=author" class="author">@jtwb</a></h2>
+        </header>
+
+        <section id="downloads" class="clearfix">
+          <a href="https://github.com/jtwb/jtwb.github.io" id="view-on-github" class="button"><span>Fork this post</span></a>
+        </section>
+
+        <hr>
+
+        <section id="main_content">
+          <p>In these early days of the age of rich web applications, the knowledge for building very fast yet complex interfaces is not well-distributed.</p>
+          <p>This article is about common performance bottlenecks you'll encounter in a large rich web applicaiton, possibly built using Ember or Backbone, and the awesome tools at your disposal for diagnosis.</p>
+
+          <h3>Bottleneck: Renderer &amp; DOM API Cache</h3>
+          <p>In my experience, most performacne problems attributed to slow Javascript code execution are really problems with the DOM API and its cache.</p>
+          <p>Some background: the browser exposes this powerful DOM API to the JS runtime with real-time information about the position of all objects on the page. When you adjust the live DOM in some way, be it by inserting or deleting nodes, or updating CSS properties, the browser's representation of that positioning information becomes stale. Recomputing these properties is a very slow process compared to your fast JS code (1-20ms).</p>
+          <p>Fortunately the browser is lazy - instead of recomputing the layout on every write, it buffers writes in a queue. Ideally, the writes can be committed when your javascript execution terminates.</p>
+          <p>If you read a stale property, you incur a DOM API Cache miss, which triggers immediate evaluation of that write queue, layout algorithms and recomputation of positioning info.</p>
+          <figure alt="Diagram of things that trigger expensive Renderer processes. It shows User Actions like resize and scroll actions triggering Renderer Repaints. It shows DOM API Cache miss and DOM API Cache evaluation triggering Renderer Reflows. It shows the Renderer object holding a reference to the DOM Tree."></figure>
+          <h4>DOM Cache Misses</h4>
+          <p><strong>Spotting the issue:</strong> Using the <span class="tool">Timeline view</span>, notice the interplay between the green Renderer activity bar and the Yellow JS activity bar. If you notice repetitive reflows during slow blocks of JS execution, that's DOM cache misses</p>
+          <p><strong>Fixing the issue:</strong> Imagine each <em>write-read</em> cycle as expensive. <em>Write-write-read-read</em> is no more costly than <em>write-read</em>, but <em>write-read-write-read</em> is twice as costly. Try to batch reads and writes into blocks. If the app is using a front-end framework, the framework may provide a way to buffer DOM updates and commit them in one big chunk. Avoid badly timed reads (between writes) by memoizing data read from the DOM API.</p>
+
+          <h3>Bottleneck: JSON &amp; HTML Parsers</h3>
+          <p>Parsing JSON is CPU- and memory-intensive. What you might not expect is that CPU exhaustion during parsing can occur and cause major sluggishness with seemingly reasonable datasets. Insidiously, these problems can evade development teams who are not checking their app on mobile devices or older machines.</p>
+          <p>Anecdotally, repeated parsing of 140kB strings of JSON causes noticeable sluggishness on my 2011 MacBook Pro.</p>
+          <figure alt="Diagram of the relationship between the network stack, JS Runtime, JS dynamic evaluation API (eval), JS object heap"></figure>
+          <h4>Resource Exhaustion During Parsing</h4>
+          <p><strong>Spotting the issue:</strong> in <span class="tool">Chrome Speed Tracer</span> you'll see big heaps of sluggishness. Subjectively, phones are affected more and you may notice locked-up browser and possibly device interface.</p>
+          <p><strong>Fixes:</strong> Do you really need that data? Consider a stripped-down version of the API with less data per-object and no unneccesary objects. Can you parse the data later or on-demand? It's OK to hold on to the raw responseText and parse on demand.</p>
+          <p>Years ago, GMail contained so much JS code (for the day) that a substantial amount of the load time was spent just parsing the code. Loading was not the issue - just parsing. Their solution was <a href="http://www.stevesouders.com/blog/2009/09/26/mobile-gmail-and-async-script-loading/">to transfer their code as modules in comment blocks and only parse a module when needed</a>. So when you clicked (or hovered) the Compose button, that would trigger parsing of the composer module.</p>
+
+          <h3>Bottleneck: User Events &amp; Timers</h3>
+          <p>Javascript runtimes are built around an event queue with no concurrent execution. It's very similar to libevent systems like nginx, EventMachine and NodeJS.</p>
+          <figure alt="Diagram of the JS runtime event queue and major sources of interrupts: timers, user events, network events"></figure>
+          <p>Innocently, a developer might attach an event listener to a high-frequency event like <em>mousemove</em> or <em>scroll</em>, or a frequent setInterval timer. Later, another developer or framework update increases the complexity of that listener's code. Suddenly you are in a <a href="http://ejohn.org/blog/learning-from-twitter/">world of pain and sluggishness</a>.</p>
+          <h4>Slow Listener Traffic Jam</h4>
+          <p><strong>Spotting the issue:</strong> <span class="tool">Chrome Speed Tracer</span> will mark these things as sluggishness. There will be a whole bunch of Javascript execution blocks squished against eachother in the timeline view.</p>
+          <p><strong>Fixes:</strong> Poll for changes to high-frequency events like <em>scroll</em> and <em>mousemove</em> instead of listening. A high-frequency poll can often create the same illusion of responsiveness with far fewer runs. Within your callback, execute as little code as possible - especially avoid touching the DOM API.</p>
+
+          <h3>Bottleneck: Javascript</h3>
+          <p>"Slow Javascript" is usually blamed for sluggishness. This is rarely the reality of the situation.</p>
+          <figure alt="Relative speeds of modern JS engines vs historical"></figure>
+          <figure alt="Relative time spent on JS, layout, etc across many pages"></figure>
+          <p>Applications which work with Canvas, Video or large datasets can encounter CPU exhaustion or heavy GC delays from poor heap management.</p>
+          <h4>Plain Old CPU Exhaustion</h4>
+          <p><strong>Spotting the issue:</strong> in <span class="tool">Chrome Speed Tracer</span> you'll see big heaps of sluggishness and excessively long processes. Subjectively, phones are affected more and you may notice locked-up browser and possibly device interface.</p>
+          <p><strong>Fixes:</strong> Don't just guess at the root of the problem! Use the <span class="tool">Profiler</span> to identify exactly what part of your code is slow. From there, you have age-old techniques like memoization, taking expensive calls out of tight loops, flyweight objects, etc. You may also explore <a href="http://asmjs.org/spec/latest/">asm.js</a> if you are truly, truly working with a very hot block of stripped-down code.</p>
+
+          <h3>Bottleneck: HTTP</h3>
+          <figure alt="Diagram of a generic browser's HTTP stack, showing layers Browser, HTTP API, TCP/IP API (Kernel or custom for Chromium), Kernel Networking system, Network Device, Wires and stuff."></figure>
+          <p>This topic is probably the most common source of slowness. It's well-covered <a href="https://developers.google.com/speed/pagespeed/">elsewhere</a>. Expert systems like Google PageSpeed and YSlow are very good at diagnosing problems in this area.</p>
+
+          <h3>Browser layers and their respective diagnostic tools</h3>
+          <dl>
+            <dt data-browsers="chrome,webkit,firefox,opera">Network tab (HAR viewer)</dt>
+            <dd>HTTP</dd>
+            <dt data-browsers="chrome,webkit">Timeline</dt>
+            <dd>Renderer &amp; DOM API </dd>
+            <dd>User Events &amp; Timers</dd>
+            <dt data-browsers="chrome,webkit">Profiler tab</dt>
+            <dd>JS Runtime</dd>
+            <dt data-browsers="chrome">Speed Tracer</dt>
+            <dd>HTML &amp; JSON Parsers</dd>
+          </dl>
+
+          <h3>Further reading</h3>
+          <ul>
+            <li><a href="http://ejohn.org/blog/how-javascript-timers-work/">http://ejohn.org/blog/how-javascript-timers-work/</a></li>
+          </ul>
+
+        </section>
+
+        <footer>
+          This page was generated by <a href="http://pages.github.com">GitHub Pages</a>. Tactile theme by <a href="https://twitter.com/jasonlong">Jason Long</a>.
+        </footer>
+      </article>
+    </div>
+  </body>
+</html>

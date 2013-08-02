@@ -20,7 +20,8 @@
 
         <header>
           <h1>What can go wrong</h1>
-          <h2>Making big sites fast - <a href="https://plus.google.com/u/1/109755762919618762766?rel=author" class="author">@jtwb</a></h2>
+          <h2>Making big sites fast - <a href="https://plus.google.com/u/1/109755762919618762766?rel=author" class="author">@jtwb</a> <a href="https://twitter.com/cxgx" class="twitter-follow-button" data-show-count="false" data-dnt="true">Follow @cxgx</a>
+          </h2>
         </header>
 
         <section id="downloads" class="clearfix">
@@ -32,6 +33,7 @@
         <section id="main_content">
           <p>In these early days of the age of rich web applications, the knowledge for building very fast yet complex interfaces is not well-distributed.</p>
           <p>This article is about common performance bottlenecks you'll encounter in a large rich web applicaiton, possibly built using Ember or Backbone, and the awesome tools at your disposal for diagnosis.</p>
+          <figure alt="Illustration of estimated and actual cause of an interval of time occupied by latency. The estimated bar is occupied by nebulous 'slow javascript'. The actual bar is occupied by some network bottlnecking, some parser CPU exhaustion, some excessive DOM operations and a tiny bit of slow JS."></figure>
 
           <h3>Bottleneck: Renderer &amp; DOM API Cache</h3>
           <p>In my experience, most performacne problems attributed to slow Javascript code execution are really problems with the DOM API and its cache.</p>
@@ -98,5 +100,6 @@
         </footer>
       </article>
     </div>
+    <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
   </body>
 </html>
